@@ -5,17 +5,21 @@ import logging
 
 class config():
     #Default values for all parameters. If the file settings.ini is absent, these values are used
-    __params={'verbose'   :   True,
-            'format' : "{YYYY} - {Jabbr} - {A3etal} - {T}",
-            'max_length_authors' : 80,
-            'max_length_filename' : 250,
-            'max_words_title' : 5,
-            'check_subfolders' : False,
-            'force_rename' : True,
-            'case' : ''
-            }
+    __params = {
+        'verbose': True,
+        'format': "{YYYY} - {Jabbr} - {A3etal} - {T}",
+        'max_length_authors': 80,
+        'max_length_filename': 250,
+        'max_words_title': 5,
+        'check_subfolders': False,
+        'force_rename': True,
+        'case': 'camel',
+        'author_case': 'none',
+        'author_sep': '',
+        'author_etal': 'EtAl',
+        'title_nofunc': True
+    }
     __setters = __params.keys()
-
 
     @staticmethod
     def update_params(new_params):
@@ -28,7 +32,7 @@ class config():
     @staticmethod
     def set(name, value):
         if name in config.__setters:
-             config.__params[name] = value
+            config.__params[name] = value
         else:
             raise NameError("Name not accepted in set() method")
         #Here we define additional actions to perform when specific parameters are modified
@@ -54,7 +58,7 @@ class config():
         '''
         path_current_directory = os.path.dirname(__file__)
         path_config_file = os.path.join(path_current_directory, 'settings.ini')
-        if not(os.path.exists(path_config_file)):
+        if not (os.path.exists(path_config_file)):
             config.WriteParamsINIfile()
         else:
             config_object = configparser.ConfigParser()
@@ -63,28 +67,37 @@ class config():
             config.__params.update(dict(config_object['DEFAULT']))
             config.ConvertParamsToBool()
             config.ConvertParamsToNumb()
+            config.ConvertParamsToString()
 
     @staticmethod
     def ConvertParamsToBool():
-        for key,val in config.__params.items():
+        for key, val in config.__params.items():
             if isinstance(val, str):
                 if val.lower() == 'true':
-                    config.__params[key]=True
+                    config.__params[key] = True
                 if val.lower() == 'false':
-                    config.__params[key]=False
+                    config.__params[key] = False
 
     @staticmethod
     def ConvertParamsToNumb():
-        for key,val in config.__params.items():
-            if isinstance(val, str) and val.lstrip("-").isdigit(): #the lstrip("-") part makes sure that also strings like '-1' are recognized as valid numbers
-                config.__params[key]=int(val)
+        for key, val in config.__params.items():
+            if isinstance(val, str) and val.lstrip("-").isdigit(
+            ):  #the lstrip("-") part makes sure that also strings like '-1' are recognized as valid numbers
+                config.__params[key] = int(val)
+
+    @staticmethod
+    def ConvertParamsToString():
+        for key, val in config.__params.items():
+            if isinstance(val, str):
+                config.__params[key] = val.strip('"').strip("'")
+
     @staticmethod
     def print():
         '''
         Prints all settings
         '''
-        for key,val in config.__params.items():
-            print(key + " : " + str(val) + ' ('+type(val).__name__+')')
+        for key, val in config.__params.items():
+            print(key + " : " + str(val) + ' (' + type(val).__name__ + ')')
 
     @staticmethod
     def WriteParamsINIfile():
@@ -96,6 +109,5 @@ class config():
         config_object = configparser.ConfigParser()
         config_object.optionxform = str
         config_object['DEFAULT'] = config.__params
-        with open(path_config_file, 'w') as configfile: #Write them on file
+        with open(path_config_file, 'w') as configfile:  #Write them on file
             config_object.write(configfile)
-
