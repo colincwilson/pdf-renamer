@@ -13,6 +13,7 @@ class config():
         'max_words_title': 5,
         'check_subfolders': False,
         'force_rename': True,
+        'dry_run': False,
         'case': 'camel',
         'author_case': 'none',
         'author_sep': '',

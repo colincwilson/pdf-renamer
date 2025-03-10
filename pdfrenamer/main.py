@@ -105,7 +105,7 @@ def rename(target, format=None, tags=None):
         numb_subfolders = len(subfolders)
         if numb_subfolders:
             logger.info(f"Found {numb_subfolders} subfolder(s)")
-            if config.get('check_subfolders') == True:
+            if config.get('check_subfolders'):
                 logger.info("Exploring subfolders...")
                 for subfolder in subfolders:
                     result = rename(subfolder, format=format, tags=tags)
@@ -131,8 +131,7 @@ def rename(target, format=None, tags=None):
             return None
 
         if check_if_file_was_already_renamed_with_same_format(
-                filename,
-                format) == True and config.get('force_rename') == False:
+                filename, format) and not config.get('force_rename'):
             logger.info(
                 f"Based on the pdf metadata, this file has been already renamed by pdf-renamer, and with the same filename format. "
                 +
@@ -171,7 +170,8 @@ def rename(target, format=None, tags=None):
                 NewPath = str(directory) + os.path.sep + NewName
                 NewPathWithExt = NewPath + ext
                 logger.info(f"The new file name is {NewPathWithExt}")
-                if (filename == NewPathWithExt):
+                if (filename == NewPathWithExt) \
+                    and not config.get('force_rename'):
                     logger.info(
                         "The new file name is identical to the old one. Nothing will be changed"
                     )
@@ -183,8 +183,10 @@ def rename(target, format=None, tags=None):
                         NewPathWithExt_renamed = rename_file(
                             filename, NewPath, ext)
                         logger.info(f"File renamed correctly.")
-                        pdf2doi.add_metadata(NewPathWithExt_renamed,
-                                             '/pdfrenamer_nameformat', format)
+                        if not config.get('dry_run'):
+                            pdf2doi.add_metadata(NewPathWithExt_renamed,
+                                                 '/pdfrenamer_nameformat',
+                                                 format)
                         if not (NewPathWithExt == NewPathWithExt_renamed):
                             logger.info(
                                 f"(Note: Another file with the same name was already present in the same folder, so a numerical index was added at the end)."
@@ -222,6 +224,8 @@ def rename_file(old_path, new_path, ext):
     i = 1
     while True:
         New_path = new_path + (f" ({i})" if i > 1 else "") + ext
+        if config.get('dry_run'):
+            return New_path
         if os.path.exists(New_path):
             i = i + 1
             continue
@@ -399,8 +403,14 @@ def main():
         help=
         "Uninstall the right-click context menu functionalities. NOTE: this feature is only available on Windows."
     )
+    parser.add_argument( \
+        "--dry_run",
+        dest="dry_run",
+        action="store_true",
+        help="Process but do not rename file(s).")
 
     args = parser.parse_args()
+    print(args)
 
     # Setup logging
     config.set(
@@ -456,6 +466,7 @@ def main():
 
     config.set('check_subfolders', args.sub_folders)
     config.set('force_rename', args.force_rename)
+    config.set('dry_run', args.dry_run)
 
     if args.set_default:
         logger.info(
@@ -481,7 +492,7 @@ def main():
         return
     ## END
 
-    if (args.decrease_verbose == True):
+    if args.decrease_verbose:
         print(
             f"(All intermediate output will be suppressed. To see additional output, do not use the command -s)"
         )
@@ -510,7 +521,8 @@ def main():
 
     for result in results:
         if result and result['identifier'] and result['path_new']:
-            if not (result['path_original'] == result['path_new']):
+            if config.get('dry_run') or config.get('force_rename') \
+                or not (result['path_original'] == result['path_new']):
                 print(Fore.YELLOW +
                       f"{os.path.relpath(result['path_original'],MainPath)}")
                 print(Fore.MAGENTA +
