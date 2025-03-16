@@ -203,15 +203,13 @@ def get_renaming_info(target, format=None, tags=None):
                 result['path_new'] = None
 
             # Add folder and filename info to bibtex entry.
-            if not result['metadata']:
-                result['metadata'] = {}
-            result['metadata']['folder'] = str(Path(filename).parent)
-            result['metadata']['filename_orig'] = str(Path(filename).name)
+            result['folder'] = str(Path(filename).parent)
+            result['filename_orig'] = str(Path(filename).name)
             if result['path_new']:
-                result['metadata']['filename_new'] = \
+                result['filename_new'] = \
                     str(Path(result['path_new']).name)
             else:
-                result['metadata']['filename_new'] = "NA"
+                result['filename_new'] = "NA"
 
         except Exception as e:
             print(traceback.format_exc())
@@ -231,18 +229,19 @@ def rename_file(old_path, new_path, ext):
     #incremental number (e.g. "filename.pdf" becomes "filename (2).pdf")
 
     if not os.path.exists(old_path):
-        raise ValueError(f"The file {old_path} does not exist")
+        raise ValueError(f"The file {old_path} does not exist.")
     i = 1
     while True:
-        New_path = new_path + (f" ({i})" if i > 1 else "") + ext
+        new_path_ = new_path.removesuffix(ext) + \
+            (f" ({i})" if i > 1 else "") + ext
         if config.get('dry_run'):
-            return New_path
-        if os.path.exists(New_path):
+            return new_path_
+        if os.path.exists(new_path_):
             i = i + 1
             continue
         else:
-            os.rename(old_path, New_path)
-            return New_path
+            os.rename(old_path, new_path_)
+            return new_path_
 
 
 def check_if_file_was_already_renamed_with_same_format(filename, format):
@@ -503,6 +502,25 @@ def main():
     if target == "":
         return
 
+    # Bibtex file created for pdfs that can be renamed.
+    if os.path.isdir(target):
+        target_dir = Path(target)
+    else:
+        target_dir = Path(target).parent
+    bibtex_file = target_dir / (str(Path(target_dir).name) + '.bib')
+    if bibtex_file.exists():
+        print(f'Stopping: bibtex file already exists.')
+        sys.exit(0)
+
+    # Subfolder for files that cannot be renamed.
+    todo_dir = target_dir / 'todo'
+    try:
+        todo_dir.mkdir(exist_ok=True)
+    except:
+        print(f'Stopping: could not create todo subfilder.')
+        sys.exit(0)
+
+    # Verbosity.
     if args.decrease_verbose:
         print(
             f"(All intermediate output will be suppressed. To see additional output, do not use the command -s)"
@@ -520,15 +538,34 @@ def main():
 
     if not isinstance(results, list):
         results = [results]
+
+    # Write results to bibtex file; move files that could
+    # not be renamed.
     for result in results:
+        folder_ = result['folder']
+        filename_old_ = result['filename_orig']
+        filename_new_ = result['filename_new']
+        result['identifier'] = None  # xxx testing only
+        # Relocate pdf to todo subfolder if could not be renamed.
+        if not (result['identifier']):
+            Path(folder_ +'/'+ filename_old_).rename( \
+                target_dir / ('todo' + '/' + filename_old_))
+            continue
+        # Write bibtex entry for pdf that could be renamed.
         try:
-            print("\n")
-            print(result['path_orig'])
-            print(result['path_new'])
-            print(result['metadata'])
-            print("\n")
+            entry = bibtexparser.loads(result['bibtex'])
+            entry.entries[0]['folder'] = result['folder']
+            entry.entries[0]['filename_old'] = result['filename_orig']
+            entry.entries[0]['filename_new'] = result['filename_new']
+            entry_str = bibtexparser.dumps(entry)
+            with open(bibtex_file, 'a') as f:
+                f.writelines(f'{entry_str}\n')
+                f.close()
         except:
-            pass
+            print(
+                'Info: could not write bibtex entry for {result["filename_orig"]}.'
+            )
+
     sys.exit(0)
 
     # Report results.
