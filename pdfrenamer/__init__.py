@@ -11,11 +11,12 @@ if not logger.handlers:
 logger.propagate = False
 
 from .config import config
+
 config.ReadParamsINIfile()
 
-config.set('verbose',config.get('verbose')) #This is a quick and dirty way (to improve in the future) to make sure that the verbosity of the pdf2doi logger is properly set according
-                                            #to the current value of config.get('verbose') (see config.py file for details)
+# Quick-and-dirty method to ensure that the verbosity of pdf2doi
+# is set according to the current value of config.get('verbose')
+config.set('verbose', config.get('verbose'))
 
-from .main import rename,build_filename
+from .main import get_renaming_info, build_filename
 from .filename_creators import *
-

@@ -1,6 +1,14 @@
 # Conda environment
 
-pdfrenamer; python 3.12
+Use within py3_13 environment.
+
+~~pdfrenamer; python 3.12~~
+
+# Usage
+
+DIR="$HOME/Projects/SignTracking/papers_more2"
+
+python pdfrenamer/main.py "$DIR" -f "{A3etal}_{T}{YYYY}" --dry_run --force_rename
 
 # Dependencies
 
@@ -10,7 +18,7 @@ pdfrenamer; python 3.12
 
 (and their dependencies)
 
-# 'Editable' local installations
+# Editable local installations
 
 python -m pip install -e ~/Library/Python/pdf2doi # updated requirements.txt with pymupdf 1.24.7
 
