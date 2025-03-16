@@ -1,18 +1,17 @@
 # Make editable script for renaming pdf files in a folder.
 # CW, March 2025
+import sys, os
 import argparse
 import logging
 import bibtexparser
-import pathlib
-import os
-import polars as pl
 import pdf2bib
 import pdf2doi
 import pdfrenamer.config as config
+import polars as pl
+from pathlib import Path
 from pdfrenamer.filename_creators import \
     (build_filename, AllowedTags, check_format_is_valid)
 import traceback
-import sys
 
 logger = logging.getLogger("pdf-renamer")
 
@@ -35,7 +34,7 @@ def get_renaming_info(target, format=None, tags=None):
     -------
     results, dictionary or list of dictionaries (or None if an error occured)
         The output is a single dictionary if target is a file, or a list of dictionaries if target is a directory, each element of the list describing one file. Each dictionary has the following keys
-        result['path_original'] : path of the pdf file (with the original filename)
+        result['path_orig'] : path of the pdf file (with the original filename)
         result['path_new'] : path of the pdf file, with the new filename, or None if it was not possible to generate a new filename
         result['identifier'] : DOI or other identifier (or None if nothing is found)
         result['identifier_type'] : String specifying the type of identifier (e.g. 'doi' or 'arxiv')
@@ -138,7 +137,7 @@ def get_renaming_info(target, format=None, tags=None):
             )
             result = dict()
             result['identifier'] = 'previously_found'
-            result['path_original'] = filename
+            result['path_orig'] = filename
             result['path_new'] = filename
             return result
 
@@ -148,7 +147,7 @@ def get_renaming_info(target, format=None, tags=None):
         )
         try:
             result = pdf2bib.pdf2bib_singlefile(filename)
-            result['path_original'] = filename
+            result['path_orig'] = filename
 
             # If pdf2bib was able to find an identifer, and thus to retrieve the bibtex data, we use them to rename the file.
             if result['metadata'] and result['identifier']:
@@ -165,32 +164,33 @@ def get_renaming_info(target, format=None, tags=None):
                 new_name = build_filename(metadata, format, tags)
                 # Extract file extension from old file name.
                 ext = os.path.splitext(filename)[-1].lower()
-                directory = pathlib.Path(filename).parent
-                new_path = str(directory) + os.path.sep + new_name
-                new_path_with_ext = new_path + ext
-                logger.info(f"The new file name is {new_path_with_ext}.")
-                if (filename == new_path_with_ext) \
-                    and not config.get('force_rename'):
+                directory = Path(filename).parent
+                new_path = str(directory) + os.path.sep + new_name + ext
+                logger.info(f"The new file name is {new_path}.")
+                if (filename == new_path) and not config.get('force_rename'):
                     logger.info(
                         "The new file name is identical to the old one. Nothing will be changed."
                     )
-                    pdf2doi.add_metadata(filename, '/pdfrenamer_nameformat',
-                                         format)
-                    result['path_new'] = NewPathWithExt
+                    pdf2doi.add_metadata( \
+                        filename,
+                        '/pdfrenamer_nameformat',
+                        format)
+                    result['path_new'] = new_path
                 else:
                     try:
-                        NewPathWithExt_renamed = rename_file(
-                            filename, NewPath, ext)
+                        new_path_renamed = rename_file( \
+                            filename, new_path, ext)
                         logger.info(f"File renamed correctly.")
                         if not config.get('dry_run'):
-                            pdf2doi.add_metadata(NewPathWithExt_renamed,
-                                                 '/pdfrenamer_nameformat',
-                                                 format)
-                        if not (NewPathWithExt == NewPathWithExt_renamed):
+                            pdf2doi.add_metadata( \
+                                new_path_renamed,
+                                '/pdfrenamer_nameformat',
+                                format)
+                        if not (new_path == new_path_renamed):
                             logger.info(
                                 f"(Note: Another file with the same name was already present in the same folder, so a numerical index was added at the end)."
                             )
-                        result['path_new'] = NewPathWithExt_renamed
+                        result['path_new'] = new_path_renamed
                     except Exception as e:
                         logger.error(
                             'Some error occured while trying to rename this file: \n '
@@ -201,6 +201,18 @@ def get_renaming_info(target, format=None, tags=None):
                     "The pdf2doi library was not able to find an identifier for this pdf file."
                 )
                 result['path_new'] = None
+
+            # Add folder and filename info to bibtex entry.
+            if not result['metadata']:
+                result['metadata'] = {}
+            result['metadata']['folder'] = str(Path(filename).parent)
+            result['metadata']['filename_orig'] = str(Path(filename).name)
+            if result['path_new']:
+                result['metadata']['filename_new'] = \
+                    str(Path(result['path_new']).name)
+            else:
+                result['metadata']['filename_new'] = "NA"
+
         except Exception as e:
             print(traceback.format_exc())
             # or
@@ -496,13 +508,28 @@ def main():
             f"(All intermediate output will be suppressed. To see additional output, do not use the command -s)"
         )
 
-    # Get renaming info.
+    # # # # # # # # # #
+
+    # Get renaming info and report results.
     results = get_renaming_info(target=target)
 
     # Exit if no results are available (e.g., when target
     # is not a valid file or directory).
     if results == None:
         return
+
+    if not isinstance(results, list):
+        results = [results]
+    for result in results:
+        try:
+            print("\n")
+            print(result['path_orig'])
+            print(result['path_new'])
+            print(result['metadata'])
+            print("\n")
+        except:
+            pass
+    sys.exit(0)
 
     # Report results.
     # Ensure that director target ends with "/" or "\" (OS dependent).
@@ -515,20 +542,17 @@ def main():
     init(autoreset=True)
     print(Fore.RED + "Summaries of changes done:")
 
-    if not isinstance(results, list):
-        results = [results]
-
     counter = 0
     counter_identifier_notfound = 0
 
     for result in results:
         if result and result['identifier'] and result['path_new']:
-            if config.get('dry_run') or config.get('force_rename') \
-                or not (result['path_original'] == result['path_new']):
+            if not (result['path_orig'] == result['path_new']) \
+                or config.get('force_rename') or config.get('dry_run'):
                 print(Fore.YELLOW +
-                      f"{os.path.relpath(result['path_original'],MainPath)}")
+                      f"{os.path.relpath(result['path_orig'], main_path)}")
                 print(Fore.MAGENTA +
-                      f"---> {os.path.relpath(result['path_new'],MainPath)}")
+                      f"---> {os.path.relpath(result['path_new'], main_path)}")
                 counter = counter + 1
         elif not (result['identifier']):
             counter_identifier_notfound = counter_identifier_notfound + 1
@@ -549,7 +573,7 @@ def main():
         )
         for result in results:
             if not (result['identifier']):
-                print(f"{result['path_original']}")
+                print(f"{result['path_orig']}")
     return
 
 
