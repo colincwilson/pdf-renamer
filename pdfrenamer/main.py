@@ -1,5 +1,6 @@
 # Make editable script for renaming pdf files in a folder.
 # CW, March 2025
+# todo: get info, and create bibtex entry or relocate, one file at a time
 import sys, os
 import argparse
 import logging
@@ -15,12 +16,13 @@ import traceback
 
 logger = logging.getLogger("pdf-renamer")
 
+# # # # # # # # # #
 
-def get_renaming_info(target, format=None, tags=None):
+
+def get_renaming_info(target, bibtex_file, todo_dir, format=None, tags=None):
     """
-    This function creates a dictionary of info that can be
-    used to rename pdf files within the target path in the
-    specified format and make bibtex files.
+    Create bibtex entries with renaming info for pdf files
+    within the target path in the specified format.
     Paper info (title, authors, etc.) is obtained via the
     library pdf2bib (which in turns uses pdf2doi).
     If the global settingcheck_subfolders is set to True,
@@ -65,20 +67,22 @@ def get_renaming_info(target, format=None, tags=None):
         logger.error(f"{target} is not a valid path to a file or a directory.")
         return
 
-    # Process dictionary target : look for all the .pdf files inside it, and for each of them call this function by passing the file path as target. Moreover, if config.get('check_subfolders')==True, call this function for all each subfolder in target.
+    # Process all pdf files in dictionary target;
+    # if config.get('check_subfolders')==True, recursively call
+    # this function for all each subfolder in target.
     if os.path.isdir(target):
         logger.info(
-            f"Looking for pdf files and subfolders in the folder {target}...")
+            f"Looking for pdf files and subfolders in the folder {target} ...")
         # Make sure the path ends with "\" or "/" (according to the OS)
         if not (target.endswith(os.path.sep)):
             target = target + os.path.sep
 
         # List all the pdf files in target folder
         # (and optionally subfolders).
-        pdf_files = [f for f in os.listdir(target) \
-            if (f.lower()).endswith('.pdf')]
-        subfolders = [f.path for f in os.scandir(target) \
-            if f.is_dir()]
+        pdf_files = sorted([f for f in os.listdir(target) \
+            if (f.lower()).endswith('.pdf')])
+        subfolders = sorted([f.path for f in os.scandir(target) \
+            if f.is_dir()])
 
         nfiles = len(pdf_files)
         if nfiles == 0:
@@ -88,13 +92,13 @@ def get_renaming_info(target, format=None, tags=None):
 
             # List to store dictionaries, one per pdf file.
             files_processed = []
-            for f in pdf_files:
+            for pdf_file in pdf_files:
                 logger.info(f"................")
-                file = target + f
-                #We call again this same function but this time targeting the single file
-                result = get_renaming_info(file, format=format, tags=tags)
+                pdf_file = target + pdf_file
+                result = get_renaming_info1(\
+                    pdf_file, bibtex_file, todo_dir, format=format, tags=tags)
                 files_processed.append(result)
-            logger.info("................")
+            logger.info("................\n\n")
 
         # If there are subfolders and config.get('check_subfolders')
         # is set, call this function on each subfolder.
@@ -114,113 +118,96 @@ def get_renaming_info(target, format=None, tags=None):
                     +
                     " When using this script from command line, use the option -sf to explore also subfolders."
                 )
-            logger.info("................")
+            logger.info("................\n\n")
+
         return files_processed
 
-    # Process file target, checking that it is an existing file and that it ends with .pdf.
-    else:
-        filename = target
-        logger.info(f"File: {filename}")
-        if not os.path.exists(filename):
-            logger.error(f"'{filename}' is not a valid file or directory.")
-            return None
-        if not (filename.lower()).endswith('.pdf'):
-            logger.error("The file must have .pdf extension.")
-            return None
+    # Process one pdf file.
+    result = get_renaming_info1(target,
+                                bibtext_file=bibtex_file,
+                                todo_dir=todo_dir,
+                                format=format,
+                                tags=tags)
 
-        if check_if_file_was_already_renamed_with_same_format(
-                filename, format) and not config.get('force_rename'):
+    return result
+
+
+def get_renaming_info1(target, bibtex_file, todo_dir, format=None, tags=None):
+    """
+    Process one pdf file, first checking that it exists and
+    ends with .pdf.
+    """
+    filename = target
+    logger.info(f"File: {filename}")
+    if not os.path.exists(filename):
+        logger.error(f"'{filename}' is not a valid file or directory.")
+        return None
+    if not (filename.lower()).endswith('.pdf'):
+        logger.error("The file must have .pdf extension.")
+        return None
+
+    # Use pdf2bib to retrieve info about the file.
+    logger.info(
+        f"Calling the pdf2bib library to retrieve the bibtex info of this file."
+    )
+    try:
+        result = pdf2bib.pdf2bib_singlefile(filename)
+        if result['metadata'] and result['identifier']:
             logger.info(
-                f"Based on the pdf metadata, this file has been already renamed by pdf-renamer, and with the same filename format. "
-                +
-                "Nothing will be done. To overrule this behavior add the command -fr to the pdf-renamer invokation."
+                f"Found bibtex data and an identifier for this file: {result['identifier']} ({result['identifier_type']})."
             )
-            result = dict()
-            result['identifier'] = 'previously_found'
-            result['path_orig'] = filename
-            result['path_new'] = filename
-            return result
+            metadata = result['metadata'].copy()
+            metadata_str = "\n\t" + "\n\t".join(
+                [f"{key} = \"{metadata[key]}\"" for key in metadata.keys()])
+            logger.info("Found the following data:" + metadata_str)
 
-        # Use pdf2bib to retrieve info about the file.
-        logger.info(
-            f"Calling the pdf2bib library to retrieve the bibtex info of this file."
+            # Generate new name calling function build_filename.
+            filename_new = build_filename(metadata, format, tags)
+            # Add file extension from old file name.
+            ext = os.path.splitext(filename)[-1].lower()
+            directory = Path(filename).parent
+            path_new = str(directory) + os.path.sep + filename_new + ext
+        else:
+            logger.info(
+                "The pdf2doi library was not able to find an identifier for this pdf file."
+            )
+            path_new = ""
+    except Exception as e:
+        logger.error(
+            f'Error in using pdf2bib to process or creating new file name for {target}.'
         )
-        try:
-            result = pdf2bib.pdf2bib_singlefile(filename)
-            result['path_orig'] = filename
+        logger.error(str(e))
+        result = {}
 
-            # If pdf2bib was able to find an identifer, and thus to retrieve the bibtex data, we use them to rename the file.
-            if result['metadata'] and result['identifier']:
-                logger.info(
-                    f"Found bibtex data and an identifier for this file: {result['identifier']} ({result['identifier_type']})."
-                )
-                metadata = result['metadata'].copy()
-                metadata_string = "\n\t" + "\n\t".join([
-                    f"{key} = \"{metadata[key]}\"" for key in metadata.keys()
-                ])
-                logger.info("Found the following data:" + metadata_string)
+    # Add folder and filename info to bibtext entry.
+    result['folder'] = str(Path(filename).parent)
+    result['filename_old'] = str(Path(filename).name)
+    result['path_new'] = path_new
+    if path_new != "":
+        result['filename_new'] = \
+            str(Path(result['path_new']).name)
+    else:
+        result['filename_new'] = ""
 
-                # Generate new name calling function build_filename.
-                new_name = build_filename(metadata, format, tags)
-                # Extract file extension from old file name.
-                ext = os.path.splitext(filename)[-1].lower()
-                directory = Path(filename).parent
-                new_path = str(directory) + os.path.sep + new_name + ext
-                logger.info(f"The new file name is {new_path}.")
-                if (filename == new_path) and not config.get('force_rename'):
-                    logger.info(
-                        "The new file name is identical to the old one. Nothing will be changed."
-                    )
-                    pdf2doi.add_metadata( \
-                        filename,
-                        '/pdfrenamer_nameformat',
-                        format)
-                    result['path_new'] = new_path
-                else:
-                    try:
-                        new_path_renamed = rename_file( \
-                            filename, new_path, ext)
-                        logger.info(f"File renamed correctly.")
-                        if not config.get('dry_run'):
-                            pdf2doi.add_metadata( \
-                                new_path_renamed,
-                                '/pdfrenamer_nameformat',
-                                format)
-                        if not (new_path == new_path_renamed):
-                            logger.info(
-                                f"(Note: Another file with the same name was already present in the same folder, so a numerical index was added at the end)."
-                            )
-                        result['path_new'] = new_path_renamed
-                    except Exception as e:
-                        logger.error(
-                            'Some error occured while trying to rename this file: \n '
-                            + str(e))
-                        result['path_new'] = None
-            else:
-                logger.info(
-                    "The pdf2doi library was not able to find an identifier for this pdf file."
-                )
-                result['path_new'] = None
+    # Write result to bibtex file, or move file if
+    # renaming info could not be found.
+    folder = result['folder']
+    filename_old = result['filename_old']
+    filename_new = result['filename_new']
+    if result['identifier'] and result['bibtex']:
+        entry = bibtexparser.loads(result['bibtex'])
+        entry.entries[0]['folder'] = result['folder']
+        entry.entries[0]['filename_old'] = result['filename_old']
+        entry.entries[0]['filename_new'] = result['filename_new']
+        entry_str = bibtexparser.dumps(entry)
+        with open(bibtex_file, 'a') as f:
+            f.writelines(f'{entry_str}\n')
+            f.close()
+    else:
+        Path(f'{folder}/{filename_old}').rename( \
+            f'{folder}/todo/{filename_old}')
 
-            # Add folder and filename info to bibtex entry.
-            result['folder'] = str(Path(filename).parent)
-            result['filename_orig'] = str(Path(filename).name)
-            if result['path_new']:
-                result['filename_new'] = \
-                    str(Path(result['path_new']).name)
-            else:
-                result['filename_new'] = "NA"
-
-        except Exception as e:
-            print(traceback.format_exc())
-            # or
-            print(sys.exc_info()[2])
-            logger.error(
-                'Some unexpected error occured while using pdf2bib to process this file: \n '
-                + str(e))
-            result['path_new'] = None
-
-        return result
+    return result
 
 
 def rename_file(old_path, new_path, ext):
@@ -528,89 +515,11 @@ def main():
 
     # # # # # # # # # #
 
-    # Get renaming info and report results.
-    results = get_renaming_info(target=target)
+    # Get renaming info for all pdfs in target.
+    results = get_renaming_info(target=target,
+                                bibtex_file=bibtex_file,
+                                todo_dir=todo_dir)
 
-    # Exit if no results are available (e.g., when target
-    # is not a valid file or directory).
-    if results == None:
-        return
-
-    if not isinstance(results, list):
-        results = [results]
-
-    # Write results to bibtex file; move files that could
-    # not be renamed.
-    for result in results:
-        folder_ = result['folder']
-        filename_old_ = result['filename_orig']
-        filename_new_ = result['filename_new']
-        result['identifier'] = None  # xxx testing only
-        # Relocate pdf to todo subfolder if could not be renamed.
-        if not (result['identifier']):
-            Path(folder_ +'/'+ filename_old_).rename( \
-                target_dir / ('todo' + '/' + filename_old_))
-            continue
-        # Write bibtex entry for pdf that could be renamed.
-        try:
-            entry = bibtexparser.loads(result['bibtex'])
-            entry.entries[0]['folder'] = result['folder']
-            entry.entries[0]['filename_old'] = result['filename_orig']
-            entry.entries[0]['filename_new'] = result['filename_new']
-            entry_str = bibtexparser.dumps(entry)
-            with open(bibtex_file, 'a') as f:
-                f.writelines(f'{entry_str}\n')
-                f.close()
-        except:
-            print(
-                'Info: could not write bibtex entry for {result["filename_orig"]}.'
-            )
-
-    sys.exit(0)
-
-    # Report results.
-    # Ensure that director target ends with "/" or "\" (OS dependent).
-    if os.path.isdir(target):
-        target = os.path.join(target, '')
-    # Get path of target (if directory, main_path == target).
-    main_path = os.path.dirname(target)
-
-    from colorama import init, Fore, Back, Style
-    init(autoreset=True)
-    print(Fore.RED + "Summaries of changes done:")
-
-    counter = 0
-    counter_identifier_notfound = 0
-
-    for result in results:
-        if result and result['identifier'] and result['path_new']:
-            if not (result['path_orig'] == result['path_new']) \
-                or config.get('force_rename') or config.get('dry_run'):
-                print(Fore.YELLOW +
-                      f"{os.path.relpath(result['path_orig'], main_path)}")
-                print(Fore.MAGENTA +
-                      f"---> {os.path.relpath(result['path_new'], main_path)}")
-                counter = counter + 1
-        elif not (result['identifier']):
-            counter_identifier_notfound = counter_identifier_notfound + 1
-
-    if counter > 0:
-        print(f"Found renaming info for {counter} file(s).")
-    else:
-        print("No renaming info found.")
-
-    if counter_identifier_notfound > 0:
-        print(
-            Fore.RED +
-            "The following pdf files could not be renamed because it was not possile to automatically find "
-            +
-            "the publication identifier (DOI or arXiv ID). Try to manually add a valid identifier to each file via "
-            +
-            "the command \"pdf2doi 'filename.pdf' -id 'valid_identifier'\" and then run again pdf-renamer."
-        )
-        for result in results:
-            if not (result['identifier']):
-                print(f"{result['path_orig']}")
     return
 
 

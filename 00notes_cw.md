@@ -6,7 +6,7 @@ Use within py3_13 environment.
 
 # Usage
 
-DIR="$HOME/Projects/SignTracking/papers_more2"
+DIR="$HOME/Projects/SignTracking/papers_more"
 
 python pdfrenamer/main.py "$DIR" -f "{A3etal}_{T}{YYYY}" --dry_run --force_rename
 
