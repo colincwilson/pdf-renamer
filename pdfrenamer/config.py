@@ -12,13 +12,12 @@ class config():
         'max_length_filename': 250,
         'max_words_title': 5,
         'check_subfolders': False,
-        'force_rename': True,
-        'dry_run': False,
         'case': 'camel',
         'author_case': 'none',
         'author_sep': '',
         'author_etal': 'EtAl',
-        'title_nofunc': True
+        'title_nofunc': True,
+        'overwrite': False,
     }
     __setters = __params.keys()
 

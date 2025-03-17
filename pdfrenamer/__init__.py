@@ -18,5 +18,5 @@ config.ReadParamsINIfile()
 # is set according to the current value of config.get('verbose')
 config.set('verbose', config.get('verbose'))
 
-from .main import get_renaming_info, build_filename
-from .filename_creators import *
+#from .main import get_renaming_info, build_filename
+#from .filename_creators import *

@@ -8,7 +8,7 @@ Use within py3_13 environment.
 
 DIR="$HOME/Projects/SignTracking/papers_more"
 
-python pdfrenamer/main.py "$DIR" -f "{A3etal}_{T}{YYYY}" --dry_run --force_rename
+python pdfrenamer/main.py "$DIR" -f "{A3etal}_{T}{YYYY}"
 
 # Dependencies
 
@@ -24,14 +24,18 @@ python -m pip install -e ~/Library/Python/pdf2doi # updated requirements.txt wit
 
 python -m pip install -e ~/Library/Python/pdf2bib
 
-# Proposed pipeline
+# Pipeline
 
-- Identify folder containing pdf files to be renamed.
+### Specify director of pdf files
 
-- Create subfolders `out` and `miss`.
+DIR="$HOME/folder_containing_pdfs"
 
-- Process each pdf with pdf2bib, marking successes and failures; also write .bib file for successes.
+### Make bibtex file with entries that include suggested renaming (filename_old -> filename_new), mark files with bibtex entries as processed, move files without bibtex entries to `todo` subfolder
 
-- Automatically rename success pdfs, but allow user to override new name with streamlit UI.
+python pdfrenamer/01_make_bibtex.py "$DIR" -f "{A3etal}_{T}{YYYY}" [--overwrite]
 
-- Move original pdf files to `miss` or `orig`.
+### Manually edit bibtex file
+
+### Rename files as specified in edited bibtex
+
+python pdfrenamer/02_rename_files.py "$DIR"

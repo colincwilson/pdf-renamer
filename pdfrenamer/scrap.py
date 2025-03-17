@@ -1,3 +1,25 @@
+def rename_file(old_path, new_path, ext):
+    """
+    Rename file old_path -> new_path, adding an incremental number
+    if another file with the same name already exists in the same
+    folder (e.g. "filename.pdf" becomes "filename (2).pdf")
+    """
+
+    if not os.path.exists(old_path):
+        raise ValueError(f"The file {old_path} does not exist.")
+    i = 1
+    while True:
+        new_path_ = new_path.removesuffix(ext) + \
+            (f" ({i})" if i > 1 else "") + ext
+        if config.get('dry_run'):
+            return new_path_
+        if os.path.exists(new_path_):
+            i = i + 1
+            continue
+        else:
+            os.rename(old_path, new_path_)
+            return new_path_
+
         logger.info(f"The new file name is {new_path}.")
         if (filename == new_path) and not config.get('force_rename'):
             logger.info(
@@ -82,3 +104,30 @@
         for result in results:
             if not (result['identifier']):
                 print(f"{result['path_orig']}")
+
+    # parser.add_argument( \
+    #     "-install--right--click",
+    #     dest="install_right_click",
+    #     action="store_true",
+    #     help=
+    #     f"Add a shortcut to pdf-renamer in the right-click context menu of Windows. You can rename a single pdf file (or all pdf files in a folder) by just right clicking on it!\n"
+    #     + "NOTE: this feature is only available on Windows.")
+    # parser.add_argument( \
+    #     "-uninstall--right--click",
+    #     dest="uninstall_right_click",
+    #     action="store_true",
+    #     help=
+    #     "Uninstall the right-click context menu functionalities. NOTE: this feature is only available on Windows."
+    # )
+
+    # #If the command -install--right--click was specified, it sets the right keys in the system registry
+    # if args.install_right_click:
+    #     config.set('verbose', True)
+    #     import pdfrenamer.utils_registry as utils_registry
+    #     utils_registry.install_right_click()
+    #     return
+    # if args.uninstall_right_click:
+    #     config.set('verbose', True)
+    #     import pdfrenamer.utils_registry as utils_registry
+    #     utils_registry.uninstall_right_click()
+    #     return
