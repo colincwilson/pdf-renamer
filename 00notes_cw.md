@@ -18,7 +18,7 @@ python pdfrenamer/main.py "$DIR" -f "{A3etal}_{T}{YYYY}"
 
 (and their dependencies)
 
-# Editable local installations
+# Editable local installation of dependencies
 
 python -m pip install -e ~/Library/Python/pdf2doi # updated requirements.txt with pymupdf 1.24.7
 
@@ -39,3 +39,13 @@ python pdfrenamer/01_make_bibtex.py "$DIR" -f "{A3etal}_{T}{YYYY}" [--overwrite]
 ### Rename files as specified in edited bibtex
 
 python pdfrenamer/02_rename_files.py "$DIR"
+
+# Alternatives
+
+<https://github.com/perrette/papers>
+
+Ex. Extract metadata from pdf with: `papers extract esd-4-11-2013.pdf`
+
+-- may be more accurate than pdf2bib / pdf2doi
+
+Ex. Add entry to bibtex file and put renamed copy of file in folder: `papers add entry.bib --bibtex papers.bib --attachment esd-4-11-2013.pdf --rename --copy`

@@ -1,6 +1,7 @@
 # Automatically make bibtex entries for pdf files in a folder,
 # including renaming suggestions filename_old -> filename_new.
 # CW, March 2025
+
 import sys, os
 import argparse
 import logging
@@ -294,7 +295,7 @@ def main():
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument( \
         "path",
-        help="Relative path of the pdf file or of a folder.",
+        help="Path of the folder containing pdf files.",
         metavar="path",
         nargs='*')
     parser.add_argument( \
